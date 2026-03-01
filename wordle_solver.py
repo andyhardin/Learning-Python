@@ -24,12 +24,45 @@ Example:
 """
 
 import argparse
+import os
 from collections import Counter
 
 # ---------------------------------------------------------------------------
-# Word list – common 5-letter English words (all confirmed 5-letter)
+# Word list – fetched from the web and cached locally on first run.
+# Falls back to the built-in list if the download fails.
 # ---------------------------------------------------------------------------
-_RAW_WORDS = """
+WORD_LIST_URL = "https://raw.githubusercontent.com/tabatkins/wordle-list/main/words"
+WORD_LIST_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wordle_words.txt")
+
+
+def _load_words() -> list[str]:
+    """Return sorted list of 5-letter words, downloading if needed."""
+    # Use cached file if available
+    if os.path.exists(WORD_LIST_CACHE):
+        with open(WORD_LIST_CACHE) as f:
+            words = [w.strip().lower() for w in f if len(w.strip()) == 5 and w.strip().isalpha()]
+        if words:
+            return sorted(set(words))
+
+    # Try to download
+    try:
+        import urllib.request
+        print(f"Downloading word list from {WORD_LIST_URL} ...")
+        with urllib.request.urlopen(WORD_LIST_URL, timeout=10) as resp:
+            text = resp.read().decode("utf-8")
+        with open(WORD_LIST_CACHE, "w") as f:
+            f.write(text)
+        words = [w.strip().lower() for w in text.splitlines() if len(w.strip()) == 5 and w.strip().isalpha()]
+        print(f"Downloaded {len(words)} words and cached to {WORD_LIST_CACHE}")
+        return sorted(set(words))
+    except Exception as exc:
+        print(f"Warning: could not download word list ({exc}), using built-in list.")
+
+    # Built-in fallback
+    return sorted(set(w.lower() for w in _FALLBACK_WORDS.split() if len(w) == 5 and w.isalpha()))
+
+
+_FALLBACK_WORDS = """
 about above abuse actor acute admit adopt adult after again agent agree ahead
 alarm album alert alien align alive alley allow alone along alter angel anger
 angle angry ankle annex apart apple apply apron arena argue arise armor aroma
@@ -135,9 +168,7 @@ windy winky wired wizen woken wooly wormy wrung wussy yacht yeoman yield
 yucky yukky zappy zappy zingy zippy zooms
 """
 
-WORDS: list[str] = sorted(
-    {w.lower() for w in _RAW_WORDS.split() if len(w) == 5 and w.isalpha()}
-)
+WORDS: list[str] = _load_words()
 
 # A known-good opening guess (high letter-frequency word)
 DEFAULT_FIRST_GUESS = "crane"
