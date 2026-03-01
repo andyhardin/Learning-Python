@@ -290,12 +290,14 @@ def interactive_mode(words: list[str]) -> None:
     """User plays Wordle; solver suggests guesses and collects feedback."""
     print("\n=== Wordle Solver – Interactive Mode ===")
     print("After each guess, enter feedback as 5 chars: G=green Y=yellow B=black")
-    print("Type 'quit' at any prompt to exit.\n")
+    print("Type 'back' to undo the last guess, 'quit' to exit.\n")
 
-    candidates = words[:]
     history: list[tuple[str, str]] = []
+    attempt = 1
 
-    for attempt in range(1, 7):
+    while attempt <= 6:
+        candidates = filter_words(words[:], history)
+
         guess = best_guess(candidates, words)
         print(f"Attempt {attempt}/6  ({len(candidates)} candidates remaining)")
         print(f"  Suggested guess: {guess.upper()}")
@@ -305,6 +307,16 @@ def interactive_mode(words: list[str]) -> None:
         if override == "quit":
             print("Bye!")
             return
+        if override == "back":
+            if history:
+                undone = history.pop()
+                attempt -= 1
+                print(f"  Undid guess '{undone[0].upper()}'. Back to attempt {attempt}.\n")
+                if history:
+                    _print_board(history)
+            else:
+                print("  Nothing to undo.\n")
+            continue
         if override and len(override) == 5 and override.isalpha():
             guess = override
 
@@ -314,26 +326,39 @@ def interactive_mode(words: list[str]) -> None:
             if fb.lower() == "quit":
                 print("Bye!")
                 return
+            if fb.lower() == "back":
+                if history:
+                    undone = history.pop()
+                    attempt -= 1
+                    print(f"  Undid guess '{undone[0].upper()}'. Back to attempt {attempt}.\n")
+                    if history:
+                        _print_board(history)
+                else:
+                    print("  Nothing to undo.\n")
+                break  # restart the outer loop at the updated attempt
             if _validate_feedback(fb):
+                history.append((guess, fb.upper()))
+                _print_board(history)
+
+                if fb.upper() == "GGGGG":
+                    print(f"\nSolved in {attempt} attempt{'s' if attempt > 1 else ''}! The word was {guess.upper()}.\n")
+                    return
+
+                candidates = filter_words(words[:], history)
+                if not candidates:
+                    print("\nNo candidates left – double-check your feedback entries.\n")
+                    return
+
+                print(f"  Remaining candidates: {', '.join(c.upper() for c in candidates[:10])}"
+                      + (" …" if len(candidates) > 10 else "") + "\n")
+                attempt += 1
                 break
+
             print("  Invalid – enter exactly 5 chars using G, Y, B.")
 
-        history.append((guess, fb.upper()))
-        _print_board(history)
-
-        if fb.upper() == "GGGGG":
-            print(f"\nSolved in {attempt} attempt{'s' if attempt > 1 else ''}! The word was {guess.upper()}.\n")
-            return
-
-        candidates = filter_words(candidates, [(guess, fb.upper())])
-        if not candidates:
-            print("\nNo candidates left – double-check your feedback entries.\n")
-            return
-
-        print(f"  Remaining candidates: {', '.join(c.upper() for c in candidates[:10])}"
-              + (" …" if len(candidates) > 10 else "") + "\n")
-
-    print(f"Could not solve in 6 attempts. Remaining: {', '.join(c.upper() for c in candidates)}\n")
+    if attempt > 6:
+        candidates = filter_words(words[:], history)
+        print(f"Could not solve in 6 attempts. Remaining: {', '.join(c.upper() for c in candidates)}\n")
 
 
 def auto_mode(answer: str, words: list[str]) -> None:
